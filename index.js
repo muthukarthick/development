@@ -16,8 +16,11 @@ const csvWriter = createCsvWriter({
     {id: 'color', title: 'Product Color'}
   ]
 });
-//const intLimit = 2; // Fetch Records Limit
 
+// Fetch Records Limit
+//const intLimit = 2; 
+
+//Template View Engine
 app.set('view engine', 'ejs');
 
 app.get('/', (req, res) => {
@@ -25,6 +28,7 @@ app.get('/', (req, res) => {
     var arrResult = [];
     var url = "https://www.zara.com/th/en/woman-l1000.html";
 
+    //Get Womens under all sub menus and links
     var getSubMenu = (async() => {
         return await new Promise(async(resolve, reject) => {
             await request.get(url, async(err, resp, body) => {
@@ -47,9 +51,6 @@ app.get('/', (req, res) => {
                                     'navURL': subNavUrl
                                 });
                             }
-                            else{
-                                return true;
-                            }
                         });
                         await resolve(arrSubCatList);
                     }
@@ -58,6 +59,7 @@ app.get('/', (req, res) => {
         });
     });
 
+    //Get each sub menu links based product listing name & url's 
     var getProductListing = (async(data) => {
         return await new Promise(async(resolve, reject) => {
             await request.get(data.navURL, async(err, resp, body) => {
@@ -74,9 +76,6 @@ app.get('/', (req, res) => {
                                     'productURL': productUrl
                                 });
                             }
-                            else{
-                                return true;
-                            }
                         });
                         await resolve(arrResult);
                     }
@@ -85,6 +84,7 @@ app.get('/', (req, res) => {
         });
     });
 
+    //Get each product details data
     var getProductDetail = (async(data) => {
         var findPriceText = "THB";
         return await new Promise(async(resolve, reject) => {
@@ -93,15 +93,16 @@ app.get('/', (req, res) => {
             .then(async(browser) => await browser.newPage())
             .then(async(page) => {
                 await page.goto(data.productURL, {timeout: 0, waitUntil: 'networkidle0'});
+                await page.waitForSelector('img');
                 try {
                     await page.waitForFunction(
-                      findPriceText => document.querySelector('body').innerText.includes(findPriceText),
-                      {},
-                      findPriceText
+                        findPriceText => document.querySelector('body').innerText.includes(findPriceText),
+                        {},
+                        findPriceText
                     );
-                  } catch(e) {
-                    console.log(`The price ("${findPriceText}") was not found on the page`);
-                  }
+                } catch(e) {
+                    console.log(`The price was not found on the page`);
+                }
                 return await page.content();
             })
             .then(async(html) => {
@@ -112,11 +113,9 @@ app.get('/', (req, res) => {
                 var price = ($('#product').find('.price')) ? $('#product').find('.price').text() : "-";
                 var color = ($('#main').find('.product-color > span._colorName')) ? $('#main').find('.product-color > span._colorName').text() : "-";
                 var arrProductImages = [];
-
                 if($('#main').find('#main-images > .image-wrap').length > 0){
                     $('#main').find('#main-images > .image-wrap').each((index, elem) => {
                         var productImageUrl = ($(elem).find('a')) ? $(elem).find('a').attr('href') : "";
-                        
                         if(productImageUrl != "" && index < 3){
                             if(productImageUrl[0] === '/'){
                                 productImageUrl = 'https:' + productImageUrl;
@@ -128,6 +127,7 @@ app.get('/', (req, res) => {
                         }
                     });
                 }
+                //return data
                 arrData.push({
                     'SKU': productSKU,
                     'productName': productName,
@@ -144,9 +144,9 @@ app.get('/', (req, res) => {
         });
     });
 
+    //call subment function
     var getSubMenuList = getSubMenu();
-    getSubMenuList.then((data) => {
-
+    getSubMenuList.then(async(data) => {
         //Get Product List
         var getProductListDetails = async function(data) {
             try {
@@ -154,7 +154,6 @@ app.get('/', (req, res) => {
             } catch (err) {
                 console.error("Product List Fetch Error : " + err);
             }
-
             //Get Product Details
             var getDetailResult = async function(data) {
                 try {
@@ -162,32 +161,25 @@ app.get('/', (req, res) => {
                 } catch (err) {
                     console.error(err);
                 }
-    
                 //Multidiamensional array to single array and remove duplicate
                 result = result.flat(1);
                 result = Array.from(new Set(result)); 
-
                 //CSV Write
                 csvWriter
                 .writeRecords(result)
                 .then(()=> console.log('The CSV file was written successfully'))
                 .catch((err) => console.log("Error : " + err));
-    
                 //Render Page
                 res.render('index', {data: result});
             };
-
             //Convert 2D array Format and remove duplicate
             productResult = productResult.flat(1);
             productResult = Array.from(new Set(productResult));
-
             //Call Function
-            getDetailResult(productResult);
+            await getDetailResult(productResult);
         };
-
         //Call Function
-        getProductListDetails(data);
-
+        await getProductListDetails(data);
     }).catch((error) => {
         console.log("Sub Menu Error : " + error);
     });
