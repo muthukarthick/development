@@ -1,7 +1,9 @@
+const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
 const request = require("request");
 const express = require("express");
 const app = express();
+const intLimit = 2; // Fetch Records Limit
 
 app.get('/', (req, res) => {
     var arrSubCatList = [];
@@ -68,6 +70,60 @@ app.get('/', (req, res) => {
         });
     });
 
+    var getProductDetail = (async(data) => {
+        return await new Promise(async(resolve, reject) => {
+            await puppeteer
+            .launch()
+            .then(async(browser) => await browser.newPage())
+            .then(async(page) => {
+                await page.goto(data.productURL, {waitUntil: 'networkidle2'});
+                await page.waitForSelector('img');
+                await page.screenshot({path: 'screenshot.png'});
+                await page.on('load',async() => {
+                    return await page.content();
+                });
+            })
+            .then(async(html) => {
+                var $ = await cheerio.load(html);
+                var arrData = [];
+                var productSKU = ($('#main').find('.product-color > :nth-child(2)')) ? $('#main').find('.product-color > :nth-child(2)').text() : "-";
+                var productName = ($('#main').find('.product-name')) ? $('#main').find('.product-name').clone().children().remove().end().text() : "-";
+                var price = ($('#product').find('.price')) ? $('#product').find('.price').text() : "-";
+                var color = ($('#main').find('.product-color > span._colorName')) ? $('#main').find('.product-color > span._colorName').text() : "-";
+                var arrProductImages = [];
+
+                if($('#main').find('#main-images > .image-wrap').length > 0){
+                    $('#main').find('#main-images > .image-wrap').each((index, elem) => {
+                        var productImageUrl = ($(elem).find('a')) ? $(elem).find('a').attr('href') : "";
+                        
+                        if(productImageUrl != "" && index < 3){
+                            if(productImageUrl[0] === '/'){
+                                productImageUrl = 'https:' + productImageUrl;
+                            }
+                            arrProductImages.push(productImageUrl);
+                        }
+                        else{
+                            return true;
+                        }
+                    });
+                }
+
+                arrData.push({
+                    'SKU': productSKU,
+                    'productName': productName,
+                    'productUrl': data.productURL,
+                    'price': price,
+                    'color': color,
+                    'images': arrProductImages,
+                    'navCategories': data.navTitle
+                });
+                await resolve(arrData);
+            }).catch(async(error) => {
+                await reject(error);
+            });
+        });
+    });
+
     var getSubMenuList = getSubMenu();
     getSubMenuList.then((data) => {
 
@@ -78,6 +134,26 @@ app.get('/', (req, res) => {
             } catch (err) {
                 console.error("Product List Fetch Error : " + err);
             }
+
+            //Get Product Details
+            var getDetailResult = async function(data) {
+                try {
+                    var result = await Promise.all(data.map(getProductDetail));
+                } catch (err) {
+                    console.error(err);
+                }
+    
+                //Multidiamensional array to single array and remove duplicate
+                result = result.flat(1);
+                result = Array.from(new Set(result)); 
+            };
+
+            //Convert 2D array Format and remove duplicate
+            productResult = productResult.flat(1);
+            productResult = Array.from(new Set(productResult));
+
+            //Call Function
+            getDetailResult(productResult);
         };
 
         //Call Function
