@@ -4,8 +4,8 @@ Working Flows :
 
 <ul>
   <li>We are fetching all product data under WOMEN - CATEGORY (https://www.zara.com/th/en/woman-l1000.html)</li>
-  <li>After fetching and generate CSV file format in root folder 'data.csv'</li>
-  <li>Display fetching data in browser 'http://localhost:8081'</li>
+  <li>Get result and generate CSV file format 'data.csv'</li>
+  <li>Display result into browser 'http://localhost:8081'</li>
 </ul> 
 
 Execution Flows :
