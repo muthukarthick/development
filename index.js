@@ -3,7 +3,22 @@ const cheerio = require("cheerio");
 const request = require("request");
 const express = require("express");
 const app = express();
-const intLimit = 2; // Fetch Records Limit
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const csvWriter = createCsvWriter({
+  path: 'data.csv',
+  header: [
+    {id: 'SKU', title: 'SKU'},
+    {id: 'productName', title: 'Product Name'},
+    {id: 'productUrl', title: 'Product URL'},
+    {id: 'price', title: 'Price'},
+    {id: 'images', title: 'Images'},
+    {id: 'navCategories', title: 'Navigation Categories'},
+    {id: 'color', title: 'Product Color'}
+  ]
+});
+//const intLimit = 2; // Fetch Records Limit
+
+app.set('view engine', 'ejs');
 
 app.get('/', (req, res) => {
     var arrSubCatList = [];
@@ -26,7 +41,7 @@ app.get('/', (req, res) => {
                             var subNavUrl = ($(elem).find('a')) ? $(elem).find('a').attr("href") : "";
                             var subNavTitle = ($(elem).find('a > :nth-child(1)').eq(0)) ? $(elem).find('a > :nth-child(1)').eq(0).text() : "";
 
-                            if(subNavUrl != "" && subNavUrl != undefined && subNavTitle != "" && subNavTitle != undefined && index < 6){
+                            if(subNavUrl != "" && subNavUrl != undefined && subNavTitle != "" && subNavTitle != undefined /*&& index < 6*/){
                                 arrSubCatList.push({
                                     'navTitle': subNavTitle,
                                     'navURL': subNavUrl
@@ -53,7 +68,7 @@ app.get('/', (req, res) => {
                     if($('#products').find('.product').length > 0){
                         $('#products').find('.product').each((index, elem) => {
                             var productUrl = $(elem).find('a').attr("href");
-                            if(productUrl && index < intLimit){
+                            if(productUrl /*&& index < intLimit*/){
                                 arrResult.push({
                                     'navTitle': data.navTitle,
                                     'productURL': productUrl
@@ -71,17 +86,23 @@ app.get('/', (req, res) => {
     });
 
     var getProductDetail = (async(data) => {
+        var findPriceText = "THB";
         return await new Promise(async(resolve, reject) => {
             await puppeteer
             .launch()
             .then(async(browser) => await browser.newPage())
             .then(async(page) => {
-                await page.goto(data.productURL, {waitUntil: 'networkidle2'});
-                await page.waitForSelector('img');
-                await page.screenshot({path: 'screenshot.png'});
-                await page.on('load',async() => {
-                    return await page.content();
-                });
+                await page.goto(data.productURL, {timeout: 0, waitUntil: 'networkidle0'});
+                try {
+                    await page.waitForFunction(
+                      findPriceText => document.querySelector('body').innerText.includes(findPriceText),
+                      {},
+                      findPriceText
+                    );
+                  } catch(e) {
+                    console.log(`The price ("${findPriceText}") was not found on the page`);
+                  }
+                return await page.content();
             })
             .then(async(html) => {
                 var $ = await cheerio.load(html);
@@ -107,7 +128,6 @@ app.get('/', (req, res) => {
                         }
                     });
                 }
-
                 arrData.push({
                     'SKU': productSKU,
                     'productName': productName,
@@ -146,6 +166,15 @@ app.get('/', (req, res) => {
                 //Multidiamensional array to single array and remove duplicate
                 result = result.flat(1);
                 result = Array.from(new Set(result)); 
+
+                //CSV Write
+                csvWriter
+                .writeRecords(result)
+                .then(()=> console.log('The CSV file was written successfully'))
+                .catch((err) => console.log("Error : " + err));
+    
+                //Render Page
+                res.render('index', {data: result});
             };
 
             //Convert 2D array Format and remove duplicate

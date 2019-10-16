@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Web Scrapping</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+</head>
+<body>
+
+<div class="container">
+  <h2 class="text-center">Scrapping Data List</h2>
+  <div>Total Records : <%= data.length %></div>  
+  <table class="table table-striped table-hover">
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>Product Name</th>
+        <th>Product URL</th>
+        <th>Price</th>
+        <th>Images</th>
+        <th>Navigation Categories</th>
+        <th>Product Color</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if(data && data.length > 0){ %>
+        <% for(var i=0; i < data.length; i++){ %>
+          <tr>
+            <td><%= data[i].SKU %></td>
+            <td><%= data[i].productName %></td>
+            <td><%= data[i].productUrl %></td>
+            <td><%= data[i].price %></td>
+            <td><% 
+                  if(data[i].images){ 
+                    for(var cntIndex = 0; cntIndex < data[i].images.length; cntIndex++){ 
+                      %><img src="<%= data[i].images[cntIndex] %>" alt="<%= data[i].images[cntIndex] %>" width="100" height="100" /><% 
+                    }
+                  } 
+            %></td>
+            <td><%= data[i].navCategories %></td>
+            <td><%= data[i].color %></td>
+          </tr>
+        <% } %>
+      <% }
+      else{%>
+        <tr class="text-center">
+            <td colspan="12">No Records Found..!</td>
+          </tr>
+      <% } %>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
