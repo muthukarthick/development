@@ -2,6 +2,7 @@ const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
 const request = require("request");
 const express = require("express");
+const execTime = require('execution-time')();
 const app = express();
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = createCsvWriter({
@@ -13,7 +14,9 @@ const csvWriter = createCsvWriter({
     {id: 'price', title: 'Price'},
     {id: 'images', title: 'Images'},
     {id: 'navCategories', title: 'Navigation Categories'},
-    {id: 'color', title: 'Product Color'}
+    {id: 'color', title: 'Product Color'},
+    {id: 'executionTime', title: 'Execution Time (Milliseconds)'},
+    {id: 'totalExecutionTime', title: 'Total Execution Time (Milliseconds)'}
   ]
 });
 
@@ -45,7 +48,7 @@ app.get('/', (req, res) => {
                             var subNavUrl = ($(elem).find('a')) ? $(elem).find('a').attr("href") : "";
                             var subNavTitle = ($(elem).find('a > :nth-child(1)').eq(0)) ? $(elem).find('a > :nth-child(1)').eq(0).text() : "";
 
-                            if(subNavUrl != "" && subNavUrl != undefined && subNavTitle != "" && subNavTitle != undefined /*&& index < 6*/){
+                            if(subNavUrl != "" && subNavUrl != undefined && subNavTitle != "" && subNavTitle != undefined /*&& index < 2*/){
                                 arrSubCatList.push({
                                     'navTitle': subNavTitle,
                                     'navURL': subNavUrl
@@ -86,6 +89,8 @@ app.get('/', (req, res) => {
 
     //Get each product details data
     var getProductDetail = (async(data) => {
+        //Start execution time of this product data fetch
+        execTime.start('detail');
         var findPriceText = "THB";
         return await new Promise(async(resolve, reject) => {
             await puppeteer
@@ -96,13 +101,13 @@ app.get('/', (req, res) => {
                 await page.waitForSelector('img');
                 try {
                     await page.waitForFunction(
-                        findPriceText => document.querySelector('body').innerText.includes(findPriceText),
-                        {},
-                        findPriceText
+                      findPriceText => document.querySelector('body').innerText.includes(findPriceText),
+                      {},
+                      findPriceText
                     );
-                } catch(e) {
+                  } catch(e) {
                     console.log(`The price was not found on the page`);
-                }
+                  }
                 return await page.content();
             })
             .then(async(html) => {
@@ -127,6 +132,10 @@ app.get('/', (req, res) => {
                         }
                     });
                 }
+
+                //Stop execution time of this product data fetch
+                var timer = execTime.stop('detail').time;
+
                 //return data
                 arrData.push({
                     'SKU': productSKU,
@@ -135,7 +144,9 @@ app.get('/', (req, res) => {
                     'price': price,
                     'color': color,
                     'images': arrProductImages,
-                    'navCategories': data.navTitle
+                    'navCategories': data.navTitle,
+                    'executionTime': timer,
+                    'totalExecutionTime': 0
                 });
                 await resolve(arrData);
             }).catch(async(error) => {
@@ -164,6 +175,16 @@ app.get('/', (req, res) => {
                 //Multidiamensional array to single array and remove duplicate
                 result = result.flat(1);
                 result = Array.from(new Set(result)); 
+
+                //Get total execution time
+                var totalExecTime = result.reduce(function(intPrev, objCur) {
+                    return parseFloat(intPrev) + parseFloat(objCur.executionTime);
+                }, 0);
+                //Update total execution time value in each array
+                result = result.map((item, index) => {
+                    item.totalExecutionTime = totalExecTime;
+                    return item;
+                });
                 //CSV Write
                 csvWriter
                 .writeRecords(result)
